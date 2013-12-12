@@ -41,7 +41,8 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
       //SUPPORTED ATTRIBUTES (OPTIONS)
 
       //minimal no of characters that needs to be entered before typeahead kicks-in
-      var minSearch = originalScope.$eval(attrs.typeaheadMinLength) || 1;
+      var minSearch = originalScope.$eval(attrs.typeaheadMinLength);
+      minSearch = minSearch === 0 ? minSearch : minSearch || 1;
 
       //minimal wait time after last character typed before typehead kicks-in
       var waitTime = originalScope.$eval(attrs.typeaheadWaitMs) || 0;
@@ -101,7 +102,7 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
           //it might happen that several async queries were in progress if a user were typing fast
           //but we are interested only in responses that correspond to the current view value
-          if (inputValue === modelCtrl.$viewValue && hasFocus) {
+          if ((inputValue === modelCtrl.$viewValue && hasFocus) || angular.isUndefined(modelCtrl.$viewValue) || modelCtrl.$viewValue === '' || modelCtrl.$viewValue === null) {
             if (matches.length > 0) {
 
               scope.activeIdx = 0;
@@ -139,43 +140,43 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
       //we need to propagate user's query so we can higlight matches
       scope.query = undefined;
 
-      //Declare the timeout promise var outside the function scope so that stacked calls can be cancelled later 
+      //Declare the timeout promise var outside the function scope so that stacked calls can be cancelled later
       var timeoutPromise;
 
       //plug into $parsers pipeline to open a typeahead on view changes initiated from DOM
       //$parsers kick-in on all the changes coming from the view as well as manually triggered by $setViewValue
       modelCtrl.$parsers.unshift(function (inputValue) {
 
-        hasFocus = true;
+          hasFocus = true;
 
-        if (inputValue && inputValue.length >= minSearch) {
-          if (waitTime > 0) {
-            if (timeoutPromise) {
-              $timeout.cancel(timeoutPromise);//cancel previous timeout
-            }
-            timeoutPromise = $timeout(function () {
-              getMatchesAsync(inputValue);
-            }, waitTime);
+          if (minSearch === 0 || inputValue && inputValue.length >= minSearch) {
+              if (waitTime > 0) {
+                  if (timeoutPromise) {
+                      $timeout.cancel(timeoutPromise);//cancel previous timeout
+                  }
+                  timeoutPromise = $timeout(function () {
+                      getMatchesAsync(inputValue);
+                  }, waitTime);
+              } else {
+                  getMatchesAsync(inputValue);
+              }
           } else {
-            getMatchesAsync(inputValue);
+              isLoadingSetter(originalScope, false);
+              resetMatches();
           }
-        } else {
-          isLoadingSetter(originalScope, false);
-          resetMatches();
-        }
 
-        if (isEditable) {
-          return inputValue;
-        } else {
-          if (!inputValue) {
-            // Reset in case user had typed something previously.
-            modelCtrl.$setValidity('editable', true);
-            return inputValue;
+          if (isEditable) {
+              return inputValue;
           } else {
-            modelCtrl.$setValidity('editable', false);
-            return undefined;
+              if (!inputValue) {
+                  // Reset in case user had typed something previously.
+                  modelCtrl.$setValidity('editable', true);
+                  return inputValue;
+              } else {
+                  modelCtrl.$setValidity('editable', false);
+                  return undefined;
+              }
           }
-        }
       });
 
       modelCtrl.$formatters.push(function (modelValue) {
@@ -219,7 +220,7 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
 
         resetMatches();
 
-        //return focus to the input element if a mach was selected via a mouse click event
+        //return focus to the input element if a match was selected via a mouse click event
         element[0].focus();
       };
 
@@ -260,7 +261,12 @@ angular.module('ui.bootstrap.typeahead', ['ui.bootstrap.position', 'ui.bootstrap
       element.bind('blur', function (evt) {
         hasFocus = false;
       });
-
+      //open selection when typeahead-min-length="0"
+      element.bind('focus', function (evt) {
+        if(minSearch === 0){
+            getMatchesAsync('');
+        }
+      });
       // Keep reference to click handler to unbind it.
       var dismissClickHandler = function (evt) {
         if (element[0] !== evt.target) {
